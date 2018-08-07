@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <title>MyGenerali DOL</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+	<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+	<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/4.6.0/papaparse.min.js"></script>
+	
+	<script>
+	/* 
+	fa scrollare zeplin x caricare le immagini
+	document.querySelector('.projectOverview').scrollTop = 0;
+	var scrollInterval = setInterval(function() {
+		document.querySelector('.projectOverview').scrollTop += 1000;
+		if (document.querySelector('.projectOverview').scrollTop >= document.querySelector('.projectOverview').scrollHeight - 1000) {
+			clearInterval(scrollInterval);
+		}
+	}, 1000);
+	*/
+	// document.querySelector('.projectOverview').scrollTop
+	// document.querySelector('.projectOverview').scrollHeight
+	/* x aver json da zeplin..occorre scrollare un po' la pagina per far caricare le img
+	var imgData = []
+	document.querySelectorAll('.screen').forEach(function(screen) {
+	   let link = screen.querySelector('.screenLink').attributes.href.value;
+	   let src = screen.querySelector('.screenImage').attributes.src.value;
+	   let name = screen.querySelector('.screenName').value;
+	   imgData.push({
+	   	 name: name,
+	     link: link,
+	     src: src
+	   })
+	   
+	} );
+	console.table(imgData);
+	console.log('z(' + JSON.stringify(imgData) + ')');
+	*/
+	
+	let zeplinData;
+	function z(data) {
+		zeplinData = data;
+	}
+	function zeplinGetImgUrl(link) {
+		let imgUrl;
+		zeplinData.forEach(function(data) {
+			if (data.link == link) {
+				imgUrl = data.src
+			}
+		})
+		return imgUrl;
+	}
+	</script>
+	<script src="data/zeplin_grab.json"></script>
+
+	<script>
+	// esportare da Excel per windows in csv, rimuovere eventuale prima riga senza nomi di colonne, convertire in uf8
+	let csvFile = 'data/excel_export.csv';
+
+	let rows;
+
+	Papa.parse(csvFile, {
+		download: true,
+		header: true,
+		complete: function(results) {
+			console.log(results);
+			rows = results.data;
+			menuPopulate(rows);
+			let hash = location.hash.replace('#','') || rows[0]['Story #'];
+			hashChange(hash);
+
+			//
+			menuFilter("s4")
+
+		}
+	});
+
+	function transform(text) {
+		text = text.replace(/([a-zA-Z]{1,3}\d+(\.+\d+){0,3})/g, '<a href="#$1">$1</a>');
+		text = text.replace(new RegExp('\n', 'g'), '<br>');
+		text = text.replace(new RegExp('\r', 'g'), '<br>');
+		text = text.replace(new RegExp('  ', 'g'), '&nbsp;&nbsp;');
+		return text
+	}
+
+	function menuPopulate(rows) {
+		let navItems = [];
+		let nav = document.querySelector('.mdl-navigation');
+		rows.forEach(function(row, i) {
+			let itemText = row['Story #'] + ' - ' + row['Feature / Group'];
+			navItems.push('<a class="mdl-navigation__link" href="#' + row['Story #'] + '">');
+			navItems.push('S'+ row['sprint #'] + '/' + row['Story #'] + ' - ' + row['Feature / Group']);
+			navItems.push('</a>');
+		});
+		nav.innerHTML = navItems.join('');
+	}
+
+	function menuSearch(e) {
+		menuFilter(e.value.toLowerCase());
+	}
+
+	function menuFilter(search) {
+		let filteredRows = rows.filter(function(row) {
+			let itemText = 'S'+ row['sprint #'] + '/' + row['Story #'] + ' - ' + row['Feature / Group'];
+			return (search == '' || itemText.toLowerCase().search(search) > -1);
+		})
+		menuPopulate(filteredRows);
+	}
+
+
+	function hashChange(hash) {
+		let index = hashToIndex(hash);
+		let row = rows[index];
+		if (row == null) {
+			return
+		}
+
+		let title    		= row['Story #'] + ' - ' + row['Feature / Group'];
+		let text    		= transform(row['User Story ']);
+		let criteria 		= transform(row['Acceptance Criteria']);
+		let storyUiPreview  = 'img/' + row['Story #'] + '.png';
+		let storyUiUrl  	= row['UI'] || '#';
+		let notes           = transform(row['Notes']);
+		let priority        = row["Priority"];
+
+		document.querySelector('.story-title').innerHTML = title;
+		document.querySelector('.story-text').innerHTML = text;
+		document.querySelector('.story-criteria').innerHTML = criteria;
+		document.querySelector('.story-note').innerHTML = notes;
+		document.querySelector('.story-priority').innerHTML = priority;
+		
+		// document.querySelector('.story-ui-preview').setAttribute('src', storyUiPreview);
+		// document.querySelector('.story-ui-url').setAttribute('href', storyUiUrl);
+
+		let storyUi  	= row['UI'];
+		let storyStr = storyUi.trim();
+		let storyUis = [];
+		if (storyStr != "") {
+			storyUis = storyStr.split('\n');
+		}
+		let uis = [];
+		
+		if (storyUis.length == 1) {
+			let uiParts = storyUis[0].split(': ');
+			uis[0] = {
+				title: uiParts[0].substr(0,4) == 'http' ? 'ui' : uiParts[0],
+				url: uiParts[0].substr(0,4) == 'http' ? uiParts[0] : uiParts[1]
+			}
+		} else {
+			storyUis.forEach(function(ui) {
+				let uiParts = ui.split(': ');
+				uis.push({
+					title: uiParts[0],
+					url: uiParts[1]
+				});
+			});
+			
+		}
+		
+		let uiHtml = [];
+		let tabs = [];
+		let tabsContent = [];
+		
+		uis.forEach(function(ui) {
+			uiHtml.push('<li>' + ui.title + ': <a href=\'' + ui.url + '\'>' + ui.url + '</a></li>');
+			tabs.push('<a href="#' + ui.title + '" class="mdl-tabs__tab">' + ui.title + '</a>');
+
+			tabsContent.push('<a href="' + ui.url + '"><img title="' + ui.title + '" src="' + zeplinGetImgUrl(ui.url) + '" /></a>');
+		});
+		
+		document.querySelector('.story-ui').innerHTML = '<ul>' + uiHtml.join('') + '</ul>';
+		document.querySelector('.story-ui-preview').innerHTML = '<ul>' + tabsContent.join('') + '</ul>';
+		/*
+		document.querySelector('.mdl-tabs__tab-bar').innerHTML = tabs.join('');
+		document.querySelector('.tabs-content').innerHTML = tabsContent.join('');
+
+		componentHandler.downgradeElements(document.querySelector('.mdl-js-tabs'));
+		componentHandler.upgradeElement(document.querySelector('.mdl-js-tabs'));
+		*/
+	}
+
+	function hashToIndex(hash) {
+		let index = -1;
+		rows.forEach(function(row, i) {
+			if (row['Story #'] == hash) {
+				index = i;
+			}
+		});
+		return index;
+	}
+
+	function indexToHash(index) {
+		return rows[index]['Story #'];
+	}
+
+	let oldHash = location.hash;
+	let hashChangeInterval = setInterval(function chechHash() {
+		if (oldHash != location.hash) {
+			hashChange(location.hash.replace('#',''))
+		}
+		oldHash = location.hash
+	}, 300);
+
+
+	</script>
+	<style>
+	.mdl-layout__drawer .mdl-navigation .mdl-navigation__link {
+		padding: 10px;
+	}
+	.mdl-textfield__input {
+		margin-left: 35px;
+		width: auto;
+	}
+	.story-ui-preview img {
+		-webkit-box-shadow: 10px 10px 30px 0px rgba(0,0,0,0.75);
+		-moz-box-shadow: 10px 10px 30px 0px rgba(0,0,0,0.75);
+		box-shadow: 10px 10px 30px 0px rgba(0,0,0,0.75);
+		margin-bottom: 20px;
+		width: 90%;
+	}
+	</style>
+  </head>
+  <body>
+
+	<div class="mdl-layout mdl-js-layout mdl-layout--fixed-drawer mdl-layout--fixed-header">
+	  <header class="mdl-layout__header">
+	    <div class="mdl-layout__header-row">
+	      <h3 class="story-title">Title</h3>
+	      <div class="mdl-layout-spacer"></div>
+	    </div>
+	  </header>
+	  <div class="mdl-layout__drawer">
+
+		<div class="mdl-textfield mdl-js-textfield">
+		  <label class="mdl-button mdl-js-button mdl-button--icon" for="sample6">
+		    <i class="material-icons">search</i>
+	      </label>
+	    <input class="mdl-textfield__input" type="text" id="sample6" onkeyup="menuSearch(this)">    
+		</div>
+
+	    <nav class="mdl-navigation">
+	      <a class="mdl-navigation__link is-active" href="">Link</a>
+	    </nav>
+
+	  </div>
+	  <main class="mdl-layout__content">
+	    <div class="page-content">
+
+			<div class="mdl-grid">
+			  <div class="mdl-cell mdl-cell--8-col">
+
+			    <div class="mdl-grid">
+				  <div class="mdl-cell mdl-cell--12-col">
+
+					
+				  	<h4>User Story</h4>
+				  	<span class="story-text"></span> (priority: <span class="story-priority"></span>)
+
+				  	<h4>Acceptance criteria</h4>
+			  		<span class="story-criteria"></span>
+
+					<h4>UI</h4>
+					<span class="story-ui"></span>		
+
+					<h4>Note</h4>
+					<span class="story-note"></span>
+
+					<h4>Utenze sigim di test</h4>
+					<span class="story-test"></span>
+
+
+				  </div>
+				</div>
+
+			  </div>
+
+			  <div class="mdl-cell mdl-cell--4-col">
+			  	<span class="story-ui-preview"></span>
+			  	<!--
+			  	<a class="story-ui-url" href=""><img class="story-ui-preview mdl-cell--12-col" src="" title="UI Preview"/></a>
+				-->
+				
+				
+
+			  </div>
+
+
+	
+	    </div>
+	  </main>
+	</div>
+
+  </body>
+</html>
